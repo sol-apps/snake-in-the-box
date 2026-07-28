@@ -1,48 +1,1013 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Snake in the Box</title>
-  <meta name="description" content="The longest induced path in a hypercube, computed and drawn in 3D for n = 1 to 5">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🐍%3C/text%3E%3C/svg%3E">
-  <style>
-    :root{ --bg:#FFB84D; --ink:#2b2b29; --muted:#74726a; --panel:#fffaf0; --line:#2b2b29; --accent:#D56062; }
-    [data-theme="dark"]{ --bg:#3f403e; --ink:#FFB84D; --muted:#b9b08f; --panel:#4b4c49; --line:#1b1b1a; --accent:#ff9aa0; }
-    *{ margin:0; box-sizing:border-box; }
-    body{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
-      font-family:"Orbitron",sans-serif; color:var(--ink); background:var(--bg); padding:24px; text-align:center;
-      transition:background-color .25s, color .25s; }
-    .toggle{ position:fixed; top:14px; right:14px; font-family:"Press Start 2P",monospace; font-size:9px;
-      padding:9px 11px; border:3px solid var(--line); border-radius:6px; background:var(--panel); color:var(--ink);
-      cursor:pointer; box-shadow:3px 3px 0 var(--line); }
-    .toggle:active{ transform:translate(2px,2px); box-shadow:none; }
-    .emoji{ font-size:clamp(3.5rem,16vw,6rem); filter:drop-shadow(3px 4px 0 rgba(0,0,0,.18)); }
-    h1{ font-family:"Press Start 2P",monospace; font-size:clamp(1rem,5vw,2rem); line-height:1.5; margin:18px 0 10px;
-      text-shadow:3px 3px 0 rgba(0,0,0,.18); }
-    p.desc{ max-width:46ch; font-weight:500; color:var(--muted); line-height:1.6; }
-    .badge{ margin-top:26px; font-family:"Press Start 2P",monospace; font-size:9px; color:var(--accent);
-      border:3px solid var(--line); border-radius:6px; padding:12px 16px; background:var(--panel);
-      box-shadow:4px 4px 0 var(--line); }
-    a.home{ margin-top:22px; font-weight:700; color:var(--accent); text-decoration:none; letter-spacing:.1em; }
-    a.home:hover{ text-decoration:underline; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Snake in the Box</title>
+<meta name="description" content="The longest induced path in a hypercube, computed and drawn in 3D for n = 1 to 5.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Fraunces:SOFT,WONK,opsz,wght@0,1,9..144,600;0,1,9..144,700&family=Martian+Mono:wght@300;500;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23C6B893'/%3E%3Cg fill='%23131410'%3E%3Ccircle cx='8' cy='7' r='3'/%3E%3Ccircle cx='24' cy='7' r='3'/%3E%3Ccircle cx='16' cy='16' r='1.4'/%3E%3Ccircle cx='24' cy='16' r='3'/%3E%3Ccircle cx='8' cy='25' r='3'/%3E%3Ccircle cx='16' cy='25' r='1.4'/%3E%3C/g%3E%3C/svg%3E">
+
+<script type="importmap">
+{"imports":{
+  "three":"https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<style>
+:root{
+  /* ground: warm graphite, a photograph of a screen that is switched off */
+  --void:#131410; --void-deep:#0a0b08;
+  /* P7 phosphor: a blue-white strike that decays to a yellow-green afterglow */
+  --strike:#CFE9FF; --strike-mid:#7FB6E8; --strike-deep:#2E5F91;
+  --glow:#A9BE4F; --glow-deep:#5C6630;
+  /* paper tape, the second material */
+  --tape:#C6B893; --tape-edge:#A6976F; --tape-ink:#1B1810;
+  /* P19 orange, used only when something goes wrong */
+  --alarm:#FF6A2B;
+  --fg:#DAD6C4; --dim:#8B8875; --faint:#56544890;
+  --line:#54524760;
+  --ui:"Archivo",system-ui,sans-serif;
+  --num:"Fraunces",Georgia,serif;
+  --mono:"Martian Mono",ui-monospace,monospace;
+  --wonk:"SOFT" 0,"WONK" 1,"opsz" 144;
+  --edge:22px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--void); color:var(--fg); font-family:var(--ui); font-size:14px;
+  overflow:hidden; -webkit-font-smoothing:antialiased;
+}
+body::after{ /* vignette; keeps the corners of the ground quiet */
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:1;
+  background:radial-gradient(ellipse 78% 74% at 50% 46%, transparent 38%, var(--void-deep) 100%);
+}
+#stage{position:fixed; inset:0; z-index:0}
+#gl{display:block; width:100%; height:100%; touch-action:none}
+#svgfall{display:none; width:100%; height:100%}
+body.nogl #gl{display:none}
+body.nogl #svgfall{display:block}
+
+.layer{position:fixed; z-index:3}
+button{font:inherit; color:inherit; background:none; border:none; cursor:pointer}
+:focus-visible{outline:2px solid var(--strike); outline-offset:3px; border-radius:1px}
+.num{font-family:var(--num); font-variation-settings:var(--wonk); font-weight:700;
+  font-variant-numeric:lining-nums}
+
+/* ---------- header ---------- */
+#head{top:var(--edge); left:var(--edge); max-width:min(30ch,42vw)}
+#head h1{
+  font-family:var(--mono); font-weight:500; font-size:12px; letter-spacing:.30em;
+  text-transform:uppercase; color:var(--fg); line-height:1.3;
+}
+#head p{margin-top:8px; font-size:12.5px; color:var(--dim); line-height:1.5; max-width:27ch}
+#head a{color:var(--dim); opacity:.55; text-decoration:none; font-size:10px; letter-spacing:.18em;
+  text-transform:uppercase; display:inline-block; margin-top:11px; font-family:var(--mono)}
+#head a:hover{color:var(--glow); opacity:1}
+
+/* ---------- dimension selector ---------- */
+#dims{top:var(--edge); right:var(--edge); text-align:right}
+.lbl{font-family:var(--mono); font-size:9px; letter-spacing:.26em; color:var(--dim); opacity:.6;
+  text-transform:uppercase; margin-bottom:1px}
+.dimrow{display:flex; gap:15px; justify-content:flex-end; align-items:baseline}
+.dim{
+  font-family:var(--num); font-variation-settings:var(--wonk); font-weight:600; font-size:33px;
+  line-height:1; color:var(--dim); opacity:.62; padding:0 1px 7px; position:relative;
+  transition:color .22s, opacity .22s;
+}
+.dim:hover{opacity:.9}
+.dim[aria-pressed="true"]{color:var(--strike); opacity:1; font-weight:700;
+  text-shadow:0 0 22px rgba(127,182,232,.5)}
+.dim[aria-pressed="true"]::after{
+  content:""; position:absolute; left:0; right:0; bottom:0; height:2px; background:var(--strike);
+  box-shadow:0 0 9px var(--strike-mid);
+}
+#opts{top:calc(var(--edge) + 66px); right:var(--edge);
+  display:flex; flex-direction:column; align-items:flex-end; gap:8px}
+.opt{
+  font-family:var(--mono); font-size:9px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--dim); border:1px solid var(--line); padding:7px 10px; transition:all .2s;
+  display:flex; align-items:center; gap:8px; background:rgba(19,20,16,.4); backdrop-filter:blur(3px);
+}
+.opt:hover:not(:disabled){color:var(--fg); border-color:var(--dim)}
+.opt .pip{width:6px; height:6px; border:1px solid currentColor; border-radius:50%; flex:none}
+.opt[aria-pressed="true"]{color:var(--glow); border-color:var(--glow-deep)}
+.opt[aria-pressed="true"] .pip{background:var(--glow); box-shadow:0 0 9px var(--glow)}
+.opt:disabled{opacity:.3; cursor:not-allowed}
+
+/* ---------- readout ---------- */
+#readout{right:var(--edge); top:50%; transform:translateY(-50%); text-align:right}
+.stat{margin-bottom:16px}
+.stat .k{font-family:var(--mono); font-size:8.5px; letter-spacing:.24em; color:var(--dim);
+  opacity:.62; text-transform:uppercase; display:block; margin-bottom:1px}
+.stat .v{font-size:38px; line-height:1.04; color:var(--fg); letter-spacing:-.005em}
+.stat .u{font-family:var(--ui); font-size:10.5px; color:var(--dim); letter-spacing:.05em;
+  margin-left:10px; white-space:nowrap}
+.stat.hero .v{font-size:54px; color:var(--strike); text-shadow:0 0 26px rgba(127,182,232,.4)}
+#fillbar{width:100px; height:2px; background:var(--line); margin:7px 0 0 auto; position:relative}
+#fillbar i{position:absolute; inset:0 auto 0 0; background:var(--strike); box-shadow:0 0 8px var(--strike-mid);
+  transition:width .5s cubic-bezier(.2,.7,.2,1)}
+
+/* ---------- punched tape ---------- */
+#tapewrap{left:var(--edge); top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:10px}
+#tape{filter:drop-shadow(0 7px 20px rgba(0,0,0,.6))}
+#tapecap{font-family:var(--mono); font-size:8px; letter-spacing:.13em; color:var(--dim); opacity:.55;
+  text-transform:uppercase; max-width:130px; line-height:1.8}
+
+/* ---------- transport ---------- */
+#transport{left:50%; bottom:var(--edge); transform:translateX(-50%); text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:11px}
+#bits{display:flex; gap:5px}
+.bit{
+  position:relative; width:40px; height:48px; border:1px solid var(--line); background:rgba(19,20,16,.5);
+  font-family:var(--mono); font-weight:500; font-size:20px; color:var(--dim);
+  display:flex; align-items:center; justify-content:center; transition:all .2s; backdrop-filter:blur(4px);
+}
+.bit:hover{border-color:var(--dim); color:var(--fg)}
+.bit.on{color:var(--strike); border-color:var(--strike-deep)}
+.bit.changed{border-color:var(--strike); color:var(--fg);
+  box-shadow:inset 0 0 16px rgba(127,182,232,.28), 0 0 12px rgba(127,182,232,.18)}
+.bit.changed.on{color:var(--strike)}
+.bit.changed::before{content:""; position:absolute; top:-7px; left:50%; margin-left:-3.5px;
+  border:3.5px solid transparent; border-top-color:var(--strike)}
+.bit.reject{border-color:var(--alarm); color:var(--alarm); animation:jolt .34s}
+@keyframes jolt{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+.bit .idx{position:absolute; bottom:2px; right:4px; font-size:7.5px; color:var(--dim); opacity:.5; font-weight:300}
+#msg{font-family:var(--mono); font-size:9.5px; letter-spacing:.11em; color:var(--dim); min-height:14px;
+  text-transform:uppercase; transition:color .2s}
+#msg.bad{color:var(--alarm)}
+#msg.good{color:var(--strike-mid)}
+#steps{display:flex; align-items:center; gap:5px}
+.tbtn{
+  width:36px; height:27px; border:1px solid var(--line); color:var(--dim);
+  display:flex; align-items:center; justify-content:center; transition:all .18s; font-size:11px;
+}
+.tbtn:hover:not(:disabled){color:var(--fg); border-color:var(--dim)}
+.tbtn:disabled{opacity:.3; cursor:not-allowed}
+.tbtn.play[aria-pressed="true"]{color:var(--glow); border-color:var(--glow-deep)}
+#pos{font-family:var(--mono); font-size:10px; color:var(--dim); opacity:.6; letter-spacing:.1em; margin:0 9px}
+
+/* ---------- search cost ---------- */
+#cost{left:var(--edge); bottom:var(--edge); font-family:var(--mono); font-size:8.5px;
+  letter-spacing:.11em; color:var(--dim); opacity:.55; line-height:2; text-transform:uppercase}
+#cost b{color:var(--fg); font-weight:500}
+
+/* ---------- notes ---------- */
+#notesbtn{right:var(--edge); bottom:var(--edge)}
+#notes{
+  position:fixed; z-index:5; top:0; right:0; bottom:0; width:min(440px,92vw);
+  background:var(--tape); color:var(--tape-ink); padding:34px 36px 48px; overflow-y:auto;
+  transform:translateX(101%); transition:transform .42s cubic-bezier(.3,.8,.25,1);
+  box-shadow:-18px 0 48px rgba(0,0,0,.55);
+  background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.03) 0 1px,transparent 1px 3px);
+}
+#notes.open{transform:none}
+#notes h2{font-family:var(--num); font-variation-settings:var(--wonk); font-weight:700;
+  font-size:29px; line-height:1.08; margin-bottom:4px}
+#notes .sub{font-family:var(--mono); font-size:8px; letter-spacing:.2em; text-transform:uppercase;
+  color:rgba(27,24,16,.55); margin-bottom:24px}
+#notes h3{font-family:var(--mono); font-size:9px; letter-spacing:.2em; text-transform:uppercase;
+  margin:26px 0 9px; color:rgba(27,24,16,.6)}
+#notes p{font-size:14px; line-height:1.65; margin-bottom:11px; color:rgba(27,24,16,.9)}
+#notes code{font-family:var(--mono); font-size:11.5px; background:rgba(27,24,16,.09); padding:1px 4px}
+#notes table{border-collapse:collapse; font-family:var(--mono); font-size:10.5px; margin:14px 0 4px}
+#notes td{padding:4px 12px 4px 0; border-bottom:1px solid rgba(27,24,16,.14)}
+#notes td:first-child{color:rgba(27,24,16,.5)}
+#notes .open9{opacity:.45}
+#notesclose{position:absolute; top:16px; right:18px; font-family:var(--mono); font-size:9px;
+  letter-spacing:.16em; color:rgba(27,24,16,.6)}
+#notesclose:hover{color:var(--tape-ink)}
+#notes .kbd{font-family:var(--mono); font-size:10px; line-height:2.1; color:rgba(27,24,16,.75)}
+#notes .kbd b{display:inline-block; min-width:80px; color:var(--tape-ink); font-weight:700}
+
+/* ---------- mobile ---------- */
+@media (max-width:640px){
+  :root{--edge:14px}
+  body{overflow-y:auto; overflow-x:hidden}
+  #stage{position:sticky; top:0; height:52vh; inset:auto}
+  body::after{height:52vh; bottom:auto}
+  #shell{position:relative; z-index:3; padding:16px var(--edge) 34px; display:flex;
+    flex-direction:column; gap:22px; align-items:center; background:var(--void)}
+  /* header and dimension keys stay pinned over the sticky canvas */
+  #head{top:var(--edge); left:var(--edge); max-width:58vw}
+  #head p{display:none}
+  #head a{margin-top:6px}
+  #dims{top:var(--edge); right:var(--edge)}
+  #dims .dim{font-size:25px; padding-bottom:5px}
+  /* everything else joins the scrolling column */
+  #opts,#readout,#tapewrap,#transport,#cost,#notesbtn{position:static; transform:none}
+  #readout{order:1} #tapewrap{order:2} #transport{order:3}
+  #opts{order:4; flex-direction:row; justify-content:center}
+  #cost{order:5} #notesbtn{order:6}
+  #readout{display:flex; gap:22px; align-items:flex-end; justify-content:center; flex-wrap:wrap;
+    text-align:center; width:100%}
+  .stat{margin:0} .stat .v{font-size:29px} .stat.hero .v{font-size:38px}
+  #fillbar{margin:6px auto 0; width:78px}
+  #tapewrap{align-items:center; max-width:100%; overflow-x:auto; padding-bottom:4px}
+  #tapecap{max-width:none; text-align:center}
+  #cost{text-align:center}
+  #notes{width:100vw; padding:30px 22px 46px}
+}
+@media (min-width:641px){ #shell{display:contents} }
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important; transition-duration:.06s!important}
+  #notes{transition:none}
+}
+</style>
 </head>
 <body>
-  <button class="toggle" id="t" type="button">DARK</button>
-  <div class="emoji">🐍</div>
+
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <svg id="svgfall" aria-hidden="true"></svg>
+</div>
+
+<header class="layer" id="head">
   <h1>Snake in the Box</h1>
-  <p class="desc">The longest induced path in a hypercube, computed and drawn in 3D for n = 1 to 5</p>
-  <div class="badge">&#9656; LIVE AT snake-in-the-box.solhann.net &mdash; START BUILDING</div>
-  <a class="home" href="https://create.solhann.net">&larr; back to the gallery</a>
-  <script>
-    const r=document.documentElement,b=document.getElementById('t');
-    const set=t=>{r.setAttribute('data-theme',t);b.textContent=t==='dark'?'LIGHT':'DARK';localStorage.setItem('solhann_theme',t)};
-    set(localStorage.getItem('solhann_theme')||'light');
-    b.onclick=()=>set(r.getAttribute('data-theme')==='dark'?'light':'dark');
-  </script>
+  <p>The longest induced path in the n-dimensional cube, searched for and drawn.</p>
+  <a href="https://create.solhann.net">&larr; solhann</a>
+</header>
+
+<nav class="layer" id="dims" aria-label="Dimension">
+  <div class="lbl">dimension</div>
+  <div class="dimrow" id="dimrow"></div>
+</nav>
+
+<div id="shell">
+
+<div class="layer" id="opts">
+  <button class="opt" id="rotbtn" type="button" aria-pressed="false">
+    <span class="pip"></span><span>rotate in n-space</span>
+  </button>
+</div>
+
+<section class="layer" id="readout">
+  <div class="stat"><span class="k">dimension</span><span class="v num" id="r-n">3</span></div>
+  <div class="stat"><span class="k">vertices</span><span class="v num" id="r-v">8</span></div>
+  <div class="stat hero"><span class="k">snake</span><span class="v num" id="r-l">4</span><span class="u">edges</span></div>
+  <div class="stat"><span class="k">fills</span><span class="v num" id="r-f">62.5</span><span class="u">%</span>
+    <div id="fillbar"><i style="width:62.5%"></i></div></div>
+</section>
+
+<aside class="layer" id="tapewrap">
+  <svg id="tape" aria-hidden="true"></svg>
+  <div id="tapecap">five-track tape,<br>punched to the read head</div>
+</aside>
+
+<div class="layer" id="transport">
+  <div id="bits" role="group" aria-label="Bit string of the current vertex; activate a bit to flip it"></div>
+  <div id="msg" role="status" aria-live="polite">flip a bit</div>
+  <div id="steps">
+    <button class="tbtn" id="bwd" type="button" aria-label="Step back" title="Step back (←)">&#9664;</button>
+    <span id="pos">00 / 04</span>
+    <button class="tbtn" id="fwd" type="button" aria-label="Step forward" title="Step forward (→)">&#9654;</button>
+    <button class="tbtn play" id="play" type="button" aria-pressed="false" aria-label="Play the trace" title="Play / pause (space)">&#9654;&#9654;</button>
+  </div>
+</div>
+
+<div class="layer" id="cost">
+  <div>depth-first search &middot; induced-path constraint</div>
+  <div>first edge fixed <b>0&thinsp;&rarr;&thinsp;1</b> &middot; <b id="c-nodes">7</b> nodes &middot; <b id="c-ms">0.10</b> ms</div>
+</div>
+
+<button class="layer opt" id="notesbtn" type="button" aria-expanded="false" aria-controls="notes">notes</button>
+
+</div><!-- /shell -->
+
+<aside id="notes" aria-hidden="true">
+  <button id="notesclose" type="button">close &times;</button>
+  <h2>The snake and the box</h2>
+  <div class="sub">induced paths in the hypercube</div>
+
+  <h3>The condition</h3>
+  <p>A snake is a path through the cube's vertices in which no two vertices are adjacent unless they are
+     consecutive on the path. Every step flips one bit, and no step may bring you back within one bit of
+     anywhere you have already been. Each vertex the snake takes burns its <em>n</em> neighbours, and a burnt
+     vertex is gone for good. The snake eats its own room to move, which is why it stops long before it runs
+     out of cube.</p>
+
+  <h3>Where it stops being known</h3>
+  <p>The search on this page settles <code>n &le; 5</code> in a few milliseconds. The same search reaches
+     <code>n = 6</code> in about 78 million nodes. Past that it needs symmetry reduction, canonical forms and
+     distributed computation; <code>n = 8</code> was closed only in 2014, after months of machine time. At
+     <code>n = 9</code> the longest snake anyone has built has 190 edges, and nobody has shown there is
+     nothing longer.</p>
+  <table>
+    <tr><td>n</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td class="open9">9</td></tr>
+    <tr><td>max</td><td>1</td><td>2</td><td>4</td><td>7</td><td>13</td><td>26</td><td>50</td><td>98</td><td class="open9">&ge;190</td></tr>
+  </table>
+
+  <h3>Bounds</h3>
+  <p>Abbott and Katchalski proved a lower bound of the form <code>&lambda;&middot;2&#8319;</code> with
+     <code>&lambda; &asymp; 0.3</code>: however large the cube gets, a snake always occupies a constant
+     fraction of it. Zémor proved an upper bound of the form <code>2&#8319;(1 &minus; c/&radic;n)</code>: it
+     never occupies nearly all of it. The fill figure in the readout starts at 100 per cent and drops as you
+     climb. Between those two results it has somewhere to settle, rather than dwindling to nothing.</p>
+
+  <h3>Why anyone wanted this</h3>
+  <p>Read the bit strings along a snake and you have a Gray code: one bit changes per step. Because the path
+     is induced, a single flipped bit either moves you one place along the snake or throws you clean off it.
+     Off it is not a codeword, so the fault announces itself instead of passing as a different valid reading.
+     That is what sent people looking for long induced paths — position encoders that would rather report an
+     error than a plausible lie.</p>
+
+  <h3>Keys</h3>
+  <div class="kbd">
+    <b>1 &ndash; 5</b> set the dimension<br>
+    <b>&larr; &rarr;</b> step the trace<br>
+    <b>space</b> play / pause<br>
+    <b>r</b> rotate in n-space<br>
+    <b>?</b> these notes
+  </div>
+
+  <h3>Colophon</h3>
+  <p>Snakes are computed in your browser, never stored. Vertex colour follows P7 phosphor: a blue-white
+     strike that decays to a yellow-green afterglow, which is exactly what a burnt vertex is. The strip on
+     the left is five-track paper tape with the sprocket holes between tracks two and three, punched as far
+     as the read head.</p>
+</aside>
+
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+/* =========================================================================
+   1. THE SEARCH — longest induced path in Q(n), first edge fixed 0 -> 1.
+   ========================================================================= */
+function solveSnake(n){
+  const N = 1 << n;
+  const nbr = [];
+  for(let v=0; v<N; v++){ const a=[]; for(let i=0;i<n;i++) a.push(v ^ (1<<i)); nbr.push(a); }
+  const deg = new Int32Array(N);       // how many path vertices are adjacent to v
+  const onPath = new Uint8Array(N);
+  const path = [];
+  let best = null, nodes = 0;
+  const push = v => { onPath[v]=1; for(const w of nbr[v]) deg[w]++; path.push(v); };
+  const pop  = () => { const v=path.pop(); onPath[v]=0; for(const w of nbr[v]) deg[w]--; };
+  function dfs(){
+    nodes++;
+    if(!best || path.length > best.length) best = path.slice();
+    const tail = path[path.length-1];
+    // u extends the path iff it is unused and its ONLY path-neighbour is the tail
+    for(const u of nbr[tail]) if(!onPath[u] && deg[u] === 1){ push(u); dfs(); pop(); }
+  }
+  const t0 = performance.now();
+  push(0); push(1); dfs();
+  const ms = performance.now() - t0;
+  return {path: best, len: best.length - 1, nodes, ms, nbr};
+}
+const SNAKES = {};
+for(let n=1;n<=5;n++) SNAKES[n] = solveSnake(n);
+
+/* =========================================================================
+   2. THE PROJECTION — a fixed linear map R^n -> R^3.
+   Columns 1-3 are the coordinate axes, so n <= 3 is literally itself and the
+   growth from 3 to 4 leaves the old cube where it stands. Columns 4-5 were
+   found numerically by maximising the smallest distance between any two
+   projected vertices; they come out mutually orthogonal at length 0.6158, and
+   the closest pair in the projection is an adjacent pair, which is the best a
+   projection can manage.
+   ========================================================================= */
+const RHO = 0.6158, S2 = Math.SQRT1_2;
+const AXES = [
+  [1,0,0], [0,1,0], [0,0,1],
+  [RHO*S2, 0, -RHO*S2],
+  [RHO*0.4128, RHO*0.8120, RHO*0.4128],
+];
+const RADIUS = [0, 0.5, 0.70711, 0.86603, 1.13148, 1.27482];   // static max |P| per n
+const FIT = 1.16;
+const scaleFor = n => FIT / Math.max(RADIUS[n], 0.86603);      // n <= 3 share one scale
+
+// n x n rotation, row-major, composed from Givens rotations in two planes
+function makeRot(n, phase){
+  const M = new Float64Array(n*n);
+  for(let i=0;i<n;i++) M[i*n+i] = 1;
+  const giv = (i,j,a) => {
+    if(i>=n || j>=n) return;
+    const c=Math.cos(a), s=Math.sin(a);
+    for(let k=0;k<n;k++){
+      const mi=M[i*n+k], mj=M[j*n+k];
+      M[i*n+k] = c*mi - s*mj; M[j*n+k] = s*mi + c*mj;
+    }
+  };
+  if(n >= 5){ giv(0,3,phase); giv(1,4,phase*0.618); }   // double rotation
+  else if(n === 4){ giv(2,3,phase); giv(0,3,phase*0.618); }
+  return M;
+}
+
+/* =========================================================================
+   3. STATE
+   ========================================================================= */
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const mqMobile = matchMedia('(max-width: 640px)');
+const isMobile = () => mqMobile.matches;
+
+const S = {
+  n: 3, prevN: 3, g: 1,          // g < 1 => mid-transition between prevN and n
+  path: [], L: 0,
+  traceK: 4, traceF: 4,          // integer target, eased float
+  rot: false, phase: 0,
+  playing: false, playT: 0,
+  orbiting: !reduceMotion,       // gentle drift until the user grabs the scene
+  reject: 0,                     // fades the tube towards alarm colour
+};
+const nHi = () => Math.max(S.n, S.prevN);
+const inTransit = () => S.n !== S.prevN;
+const topW = () => !inTransit() ? 1 : (S.n > S.prevN ? S.g : 1 - S.g);
+const smoothstep = (a,b,x) => { const t = Math.min(1, Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
+
+function loadSnake(n){
+  const s = SNAKES[n];
+  S.path = s.path; S.L = s.len;
+  S.traceK = s.len; S.traceF = s.len;
+}
+loadSnake(3);
+
+/* =========================================================================
+   4. PROJECTED POSITIONS
+   ========================================================================= */
+let POS = [];
+function computePositions(){
+  const H = nHi(), N = 1<<H, w = topW();
+  const sc = inTransit()
+    ? THREE.MathUtils.lerp(scaleFor(Math.min(S.n,S.prevN)), scaleFor(H), w)
+    : scaleFor(H);
+  const M = S.rot && H >= 4 ? makeRot(H, S.phase) : null;
+  const x = new Float64Array(H), y = new Float64Array(H);
+  if(POS.length !== N) POS = Array.from({length:N}, () => new THREE.Vector3());
+  for(let v=0; v<N; v++){
+    for(let i=0;i<H;i++){
+      let c = ((v>>i)&1) - 0.5;
+      if(inTransit() && i === H-1) c *= w;     // the new axis unfolds
+      x[i] = c;
+    }
+    let r = x;
+    if(M){ for(let i=0;i<H;i++){ let s=0; for(let k=0;k<H;k++) s += M[i*H+k]*x[k]; y[i]=s; } r=y; }
+    let px=0, py=0, pz=0;
+    for(let i=0;i<H;i++){ const a=AXES[i]; px += r[i]*a[0]; py += r[i]*a[1]; pz += r[i]*a[2]; }
+    POS[v].set(px*sc, py*sc, pz*sc);
+  }
+  return sc;
+}
+// world distance between adjacent vertices — every size on screen derives from this
+const sepWorld = sc => (nHi() <= 3 ? 1 : RHO) * sc;
+
+function truncate(pts, f){
+  if(pts.length < 2) return pts.slice();
+  const seg = []; let total = 0;
+  for(let i=1;i<pts.length;i++){ const d = pts[i].distanceTo(pts[i-1]); seg.push(d); total += d; }
+  if(total < 1e-9) return pts.slice();
+  let want = f * total;
+  const out = [pts[0].clone()];
+  for(let i=0;i<seg.length;i++){
+    if(want >= seg[i] - 1e-9){ out.push(pts[i+1].clone()); want -= seg[i]; }
+    else { out.push(pts[i].clone().lerp(pts[i+1], Math.max(0, want/seg[i]))); want = 0; break; }
+  }
+  return out;
+}
+
+/* =========================================================================
+   5. SCENE
+   ========================================================================= */
+const canvas = document.getElementById('gl');
+let renderer, scene, camera, controls, ok = true;
+try{
+  renderer = new THREE.WebGLRenderer({canvas, antialias:!isMobile(), alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile() ? 1.75 : 2));
+}catch(e){ ok = false; }
+
+let group, vertMesh, glowPts, edgeLines, tubeMesh, tubeGlow, marker;
+const junk = [];
+const T = {};
+
+// a soft round sprite — a solid additive sphere reads as a grey disc, this does not
+function glowTexture(){
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(32,32,0,32,32,32);
+  grd.addColorStop(0,   'rgba(255,255,255,1)');
+  grd.addColorStop(0.18,'rgba(255,255,255,.55)');
+  grd.addColorStop(0.45,'rgba(255,255,255,.13)');
+  grd.addColorStop(1,   'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0,0,64,64);
+  return new THREE.CanvasTexture(c);
+}
+
+if(ok){
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+  camera.position.set(2.4, 1.75, 3.3);
+  controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true; controls.dampingFactor = 0.08;
+  controls.enablePan = false;
+  controls.addEventListener('start', () => { S.orbiting = false; });
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  const key = new THREE.DirectionalLight(0xCFE9FF, 1.6); key.position.set(2,3,2); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xA9BE4F, 0.55); rim.position.set(-2,-1.5,-2); scene.add(rim);
+
+  group = new THREE.Group(); scene.add(group);
+
+  T.tube = new THREE.MeshPhongMaterial({
+    color:0x2464a0, emissive:0x5aa5dd, emissiveIntensity:0.62,
+    specular:0xffffff, shininess:80, transparent:true});
+  T.tubeGlow = new THREE.ShaderMaterial({
+    uniforms:{uColor:{value:new THREE.Color(0x9fd0f5)}, uI:{value:0.9}},
+    vertexShader:`varying vec3 vN; varying vec3 vE;
+      void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0);
+        vN = normalize(normalMatrix*normal); vE = normalize(-mv.xyz);
+        gl_Position = projectionMatrix*mv; }`,
+    fragmentShader:`uniform vec3 uColor; uniform float uI; varying vec3 vN; varying vec3 vE;
+      void main(){ float f = 1.0 - abs(dot(normalize(vN), normalize(vE)));
+        gl_FragColor = vec4(uColor, pow(f, 3.6) * uI); }`,
+    transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.BackSide});
+  T.vert = new THREE.MeshBasicMaterial({toneMapped:false});
+  T.glow = new THREE.ShaderMaterial({
+    uniforms:{map:{value:glowTexture()}, uScale:{value:600}},
+    vertexShader:`uniform float uScale; attribute float size; attribute vec3 gcol; varying vec3 vC;
+      void main(){ vC = gcol; vec4 mv = modelViewMatrix*vec4(position,1.0);
+        gl_PointSize = max(1.0, size * uScale / -mv.z);
+        gl_Position = projectionMatrix*mv; }`,
+    fragmentShader:`uniform sampler2D map; varying vec3 vC;
+      void main(){ float a = texture2D(map, gl_PointCoord).a;
+        if(a < 0.004) discard; gl_FragColor = vec4(vC, a); }`,
+    uniformsNeedUpdate:true,
+    transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, depthTest:true});
+  T.glow.uniforms.uScale.value = 600;
+  T.edge = new THREE.LineBasicMaterial({vertexColors:true, transparent:true, opacity:0.9});
+  T.marker = new THREE.MeshBasicMaterial({color:0xFF6A2B, toneMapped:false, transparent:true});
+
+  marker = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), T.marker);
+  marker.visible = false; marker.frustumCulled = false; group.add(marker);
+}
+
+let EDGE_LIST = [], edgePos, edgeCol, glowPos, glowSize, glowCol, builtFor = -1;
+const ST = {col:null, scl:null, flare:null, known:null};
+
+function buildMeshes(){
+  const H = nHi(), N = 1 << H;
+  if(builtFor === H) return;
+  builtFor = H;
+  for(const o of junk){ o.geometry?.dispose?.(); group.remove(o); }
+  junk.length = 0;
+
+  vertMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 14, 10), T.vert, N);
+  vertMesh.frustumCulled = false;
+  vertMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  group.add(vertMesh); junk.push(vertMesh);
+
+  const gg = new THREE.BufferGeometry();
+  glowPos = new Float32Array(N*3); glowSize = new Float32Array(N); glowCol = new Float32Array(N*3);
+  gg.setAttribute('position', new THREE.BufferAttribute(glowPos, 3).setUsage(THREE.DynamicDrawUsage));
+  gg.setAttribute('size', new THREE.BufferAttribute(glowSize, 1).setUsage(THREE.DynamicDrawUsage));
+  gg.setAttribute('gcol', new THREE.BufferAttribute(glowCol, 3).setUsage(THREE.DynamicDrawUsage));
+  glowPts = new THREE.Points(gg, T.glow); glowPts.frustumCulled = false;
+  group.add(glowPts); junk.push(glowPts);
+
+  EDGE_LIST = [];
+  for(let v=0; v<N; v++) for(let i=0;i<H;i++){ const u = v ^ (1<<i); if(u > v) EDGE_LIST.push([v,u]); }
+  const eg = new THREE.BufferGeometry();
+  edgePos = new Float32Array(EDGE_LIST.length * 6);
+  edgeCol = new Float32Array(EDGE_LIST.length * 6);
+  eg.setAttribute('position', new THREE.BufferAttribute(edgePos, 3).setUsage(THREE.DynamicDrawUsage));
+  eg.setAttribute('color', new THREE.BufferAttribute(edgeCol, 3).setUsage(THREE.DynamicDrawUsage));
+  edgeLines = new THREE.LineSegments(eg, T.edge); edgeLines.frustumCulled = false;
+  group.add(edgeLines); junk.push(edgeLines);
+
+  ST.col = new Float32Array(N*3); ST.scl = new Float32Array(N);
+  ST.flare = new Float32Array(N); ST.known = new Int8Array(N).fill(-1);
+}
+
+/* ---- vertex states: 2 = on the snake, 1 = burnt, 0 = free ---- */
+const C_SNAKE = new THREE.Color(0xDCEEFF);
+const C_HEAD  = new THREE.Color(0xffffff);
+const C_BURNT = new THREE.Color(0xA9BE4F);
+const C_FREE  = new THREE.Color(0x3B3C34);
+function vertexStates(k){
+  const st = new Uint8Array(1 << nHi());
+  const nbr = SNAKES[S.n].nbr;
+  const top = Math.min(k, S.path.length - 1);
+  for(let i=0;i<=top;i++) st[S.path[i]] = 2;
+  for(let i=0;i<=top;i++) for(const u of nbr[S.path[i]]) if(st[u] !== 2) st[u] = 1;
+  return st;
+}
+
+/* =========================================================================
+   6. FRAME
+   ========================================================================= */
+const dummy = new THREE.Object3D();
+const _c = new THREE.Color(), _p = new THREE.Vector3(), _down = new THREE.Vector3(0,-1,0);
+const C_ALARM = new THREE.Color(0xFF6A2B), C_EMIS = new THREE.Color(0x5aa5dd);
+const C_TUBE = new THREE.Color(0x2464a0), C_TUBE_BAD = new THREE.Color(0x8a2a10);
+let snakeAlpha = 1, lastT = performance.now(), lastTapeK = -1;
+const flying = {on:false, t:0, from:0, to:0, legal:false};
+
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - lastT)/1000); lastT = now;
+
+  if(inTransit()){
+    S.g += dt / (reduceMotion ? 0.18 : 0.9);
+    if(S.g >= 1){ S.g = 1; S.prevN = S.n; }
+  }
+  snakeAlpha = inTransit() ? (S.g < 0.34 ? 1 - S.g/0.34 : smoothstep(0.62, 0.95, S.g)) : 1;
+  if(inTransit() && S.g < 0.62) S.traceF = 0;
+
+  if(S.rot && nHi() >= 4) S.phase += dt * 0.17;
+
+  if(S.playing && !inTransit()){
+    S.playT += dt;
+    if(S.playT > 0.6){ S.playT = 0; setTrace(S.traceK >= S.L ? 0 : S.traceK + 1, true); }
+  }
+  const ease = reduceMotion ? 1 : 1 - Math.pow(0.0015, dt);
+  S.traceF += (S.traceK - S.traceF) * ease;
+  if(Math.abs(S.traceK - S.traceF) < 0.002) S.traceF = S.traceK;
+  S.reject = Math.max(0, S.reject - dt*1.6);
+
+  const sc = computePositions();
+
+  // the tape is punched by what is on screen, not by where the trace is headed
+  const tapeK = Math.max(0, Math.min(S.L, Math.round(S.traceF)));
+  if(tapeK !== lastTapeK){ lastTapeK = tapeK; buildTape(tapeK); }
+
+  if(!ok){ renderFallback(); return; }
+
+  buildMeshes();
+  const sep = sepWorld(sc), H = nHi(), N = 1 << H, w = topW();
+  const kInt = Math.max(0, Math.min(S.L, Math.floor(S.traceF + 1e-6)));
+  const settled = !(inTransit() && S.g < 0.62);
+  const st = vertexStates(kInt);
+  const head = S.path[Math.min(kInt, S.path.length-1)];
+
+  // the snake's beads sit just proud of the tube; only the trace head swells
+  const R_SNAKE = 0.082*sep, R_HEAD = 0.107*sep, R_BURNT = 0.060*sep, R_FREE = 0.026*sep;
+  const cLerp = 1 - Math.pow(0.0006, dt);
+  for(let v=0; v<N; v++){
+    const state = settled ? st[v] : 0;
+    if(ST.known[v] !== state){
+      if(state === 1 && ST.known[v] === 0) ST.flare[v] = 1;   // it has just burned
+      ST.known[v] = state;
+    }
+    ST.flare[v] *= Math.pow(0.015, dt);
+    const f = ST.flare[v];
+    const target = state === 2 ? (v === head ? C_HEAD : C_SNAKE) : state === 1 ? C_BURNT : C_FREE;
+    const tScl = (state === 2 ? (v === head ? R_HEAD : R_SNAKE)
+                : state === 1 ? R_BURNT : R_FREE) * (1 + f*1.5);
+    const i3 = v*3;
+    ST.col[i3]   += (target.r - ST.col[i3])   * cLerp;
+    ST.col[i3+1] += (target.g - ST.col[i3+1]) * cLerp;
+    ST.col[i3+2] += (target.b - ST.col[i3+2]) * cLerp;
+    ST.scl[v]    += (tScl - ST.scl[v]) * cLerp;
+
+    // vertices on the axis being unfolded fade in as it separates
+    const pres = (inTransit() && ((v >> (H-1)) & 1)) ? w : 1;
+
+    dummy.position.copy(POS[v]);
+    dummy.scale.setScalar(Math.max(1e-4, ST.scl[v] * (0.4 + 0.6*pres)));
+    dummy.updateMatrix();
+    vertMesh.setMatrixAt(v, dummy.matrix);
+    _c.setRGB(ST.col[i3]*pres, ST.col[i3+1]*pres, ST.col[i3+2]*pres);
+    vertMesh.setColorAt(v, _c);
+
+    glowPos[i3] = POS[v].x; glowPos[i3+1] = POS[v].y; glowPos[i3+2] = POS[v].z;
+    const gAmt = state === 2 ? 1 : state === 1 ? 0.55 : 0;
+    glowSize[v] = ST.scl[v] * (4.2 + f*7) * pres * (gAmt > 0 ? 1 : 0);
+    const gi = (state === 2 ? 0.32 : 0.34) * pres * gAmt * (1 + f*2.2);
+    glowCol[i3] = ST.col[i3]*gi; glowCol[i3+1] = ST.col[i3+1]*gi; glowCol[i3+2] = ST.col[i3+2]*gi;
+  }
+  vertMesh.instanceMatrix.needsUpdate = true;
+  if(vertMesh.instanceColor) vertMesh.instanceColor.needsUpdate = true;
+  for(const a of ['position','size','gcol']) glowPts.geometry.attributes[a].needsUpdate = true;
+
+  for(let e=0; e<EDGE_LIST.length; e++){
+    const [a,b] = EDGE_LIST[e], o = e*6;
+    edgePos[o]=POS[a].x; edgePos[o+1]=POS[a].y; edgePos[o+2]=POS[a].z;
+    edgePos[o+3]=POS[b].x; edgePos[o+4]=POS[b].y; edgePos[o+5]=POS[b].z;
+    let al = 1;
+    if(inTransit()){
+      al = Math.min(((a>>(H-1))&1) ? w : 1, ((b>>(H-1))&1) ? w : 1);
+    }
+    // an edge with both ends spoken for warms very slightly — the lattice stays quiet
+    const hot = settled && st[a] && st[b];
+    const r=(hot?0.20:0.145)*al, g=(hot?0.21:0.151)*al, bl=(hot?0.155:0.132)*al;
+    edgeCol[o]=r; edgeCol[o+1]=g; edgeCol[o+2]=bl;
+    edgeCol[o+3]=r; edgeCol[o+4]=g; edgeCol[o+5]=bl;
+  }
+  edgeLines.geometry.attributes.position.needsUpdate = true;
+  edgeLines.geometry.attributes.color.needsUpdate = true;
+
+  rebuildTube(sep);
+  T.tube.emissive.copy(C_EMIS).lerp(C_ALARM, S.reject);
+  T.tube.color.copy(C_TUBE).lerp(C_TUBE_BAD, S.reject);
+  T.tubeGlow.uniforms.uColor.value.set(0x9fd0f5).lerp(C_ALARM, S.reject);
+
+  if(flying.on){
+    flying.t += dt / (reduceMotion ? 0.55 : 1.3);
+    marker.visible = true;
+    marker.scale.setScalar(0.115*sep);
+    const a = POS[flying.from], b = POS[flying.to];
+    if(flying.t < 0.3){
+      const u = flying.t/0.3;
+      marker.position.lerpVectors(a, b, u*u*(3-2*u));
+      T.marker.opacity = 1;
+      T.marker.color.set(flying.legal ? 0xCFE9FF : 0xFF6A2B);
+    }else if(flying.legal){
+      marker.visible = false; flying.on = false;
+    }else{
+      const u = (flying.t - 0.3)/0.7;                    // thrown clean off, into nothing
+      _p.copy(b).sub(a).normalize();
+      marker.position.copy(b).addScaledVector(_p, u*1.6*sep).addScaledVector(_down, u*u*2.6*sep);
+      T.marker.opacity = Math.max(0, 1 - u*1.1);
+      if(flying.t >= 1){ flying.on = false; marker.visible = false; }
+    }
+  }
+
+  if(S.orbiting){
+    const a = dt*0.07, cs = Math.cos(a), sn = Math.sin(a);
+    const {x, z} = camera.position;
+    camera.position.x = x*cs - z*sn; camera.position.z = x*sn + z*cs;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+let lastTubeKey = '';
+function rebuildTube(sep){
+  const key = [S.n, S.prevN, S.g*400|0, S.traceF*220|0, S.rot ? S.phase*300|0 : 0, sep.toFixed(3)].join('|');
+  if(key !== lastTubeKey){
+    lastTubeKey = key;
+    if(tubeMesh){ tubeMesh.geometry.dispose(); group.remove(tubeMesh); tubeMesh = null; }
+    if(tubeGlow){ tubeGlow.geometry.dispose(); group.remove(tubeGlow); tubeGlow = null; }
+    if(snakeAlpha < 0.02 || S.traceF < 0.004) return;
+
+    let pts = truncate(S.path.map(v => POS[v]), Math.min(1, S.L > 0 ? S.traceF/S.L : 0));
+    if(pts.length < 2) return;
+    if(pts.length === 2) pts = [pts[0], pts[0].clone().lerp(pts[1], 0.5), pts[1]];
+    const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.5);
+    const segs = Math.max(14, pts.length * (isMobile() ? 8 : 13));
+    const r = 0.072 * sep;
+    tubeMesh = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r, isMobile()?7:10, false), T.tube);
+    // the glow shell stays close to the tube: any wider and it self-intersects at the corners
+    tubeGlow = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r*1.22, isMobile()?9:14, false), T.tubeGlow);
+    tubeMesh.frustumCulled = tubeGlow.frustumCulled = false;
+    group.add(tubeMesh, tubeGlow);
+  }
+  T.tube.opacity = snakeAlpha;
+  T.tubeGlow.uniforms.uI.value = 0.9 * snakeAlpha;
+}
+
+function resize(){
+  if(!ok) return;
+  const stage = document.getElementById('stage');
+  const w = stage.clientWidth || 1, h = stage.clientHeight || 1;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+  // pull the camera back far enough that the widest object still clears both axes
+  const R = 1.4, vT = Math.tan(THREE.MathUtils.degToRad(camera.fov)/2);
+  const dist = Math.max(R/vT, R/(vT*camera.aspect));
+  camera.position.setLength(dist);
+  controls.minDistance = dist*0.45; controls.maxDistance = dist*3;
+  T.glow.uniforms.uScale.value = h * renderer.getPixelRatio() / (2*vT);
+}
+addEventListener('resize', resize);
+
+/* =========================================================================
+   7. SVG FALLBACK (no WebGL) — static projection, still traceable
+   ========================================================================= */
+const svgFall = document.getElementById('svgfall');
+function renderFallback(){
+  const H = nHi(), N = 1 << H, k = Math.floor(S.traceF);
+  const st = vertexStates(k);
+  const stage = document.getElementById('stage');
+  const W = stage.clientWidth || 800, Ht = stage.clientHeight || 600;
+  const R = Math.min(W, Ht) * 0.34;
+  const P = POS.map(p => [W/2 + (p.x - p.z*0.35)*R, Ht/2 - (p.y + p.z*0.22)*R]);
+  let s = '';
+  for(let v=0;v<N;v++) for(let i=0;i<H;i++){ const u = v^(1<<i); if(u < v) continue;
+    s += `<line x1="${P[v][0]}" y1="${P[v][1]}" x2="${P[u][0]}" y2="${P[u][1]}" stroke="#3A3B33"/>`; }
+  s += `<polyline points="${S.path.slice(0,k+1).map(v=>P[v].join(',')).join(' ')}" fill="none"
+        stroke="#7FB6E8" stroke-width="${R*0.05}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  for(let v=0;v<N;v++){
+    const c = st[v]===2 ? '#DCEEFF' : st[v]===1 ? '#A9BE4F' : '#43443B';
+    const rr = st[v]===2 ? R*0.045 : st[v]===1 ? R*0.028 : R*0.013;
+    s += `<circle cx="${P[v][0]}" cy="${P[v][1]}" r="${rr}" fill="${c}"/>`;
+  }
+  svgFall.setAttribute('viewBox', `0 0 ${W} ${Ht}`);
+  svgFall.innerHTML = s;
+}
+if(!ok) document.body.classList.add('nogl');
+
+/* =========================================================================
+   8. PUNCHED TAPE — five-track, sprocket holes between tracks 2 and 3
+   ========================================================================= */
+const tapeSvg = document.getElementById('tape');
+function buildTape(k){
+  const n = S.n, rows = S.L + 1, horiz = isMobile();
+  const PITCH = 23, COL = 13, PAD = 14, SPR = 9;
+  const cols = []; let x = PAD;
+  const sprocketAfter = n >= 3 ? 2 : n;        // as on real ITA2 tape
+  let sprocketX = null;
+  for(let t=0; t<n; t++){
+    cols.push(x + COL/2); x += COL;
+    if(t === sprocketAfter-1){ sprocketX = x + SPR/2; x += SPR; }
+  }
+  if(sprocketX === null){ sprocketX = x + SPR/2; x += SPR; }
+  const across = x + PAD, along = rows*PITCH + PAD;
+  const W = horiz ? along : across, Ht = horiz ? across : along;
+  const at = (a, b) => horiz ? [b, a] : [a, b];
+
+  let s = `<rect width="${W}" height="${Ht}" fill="var(--tape)"/>`;
+  s += horiz ? `<rect width="${W}" height="2" fill="var(--tape-edge)" opacity=".55"/>`
+             : `<rect width="2" height="${Ht}" fill="var(--tape-edge)" opacity=".55"/>`;
+  for(let r=0; r<rows; r++){
+    const a = PAD/2 + r*PITCH + PITCH/2;
+    const [rx, ry] = horiz ? [PAD/2 + r*PITCH, 0] : [0, PAD/2 + r*PITCH];
+    s += `<rect class="taperow" data-r="${r}" x="${rx}" y="${ry}" width="${horiz?PITCH:W}"
+           height="${horiz?Ht:PITCH}" fill="transparent" style="cursor:pointer"/>`;
+    if(r > k) continue;                        // stock beyond the head is unpunched
+    const v = S.path[r];
+    for(let t=0; t<n; t++){
+      if(!((v >> (n-1-t)) & 1)) continue;      // track 1 carries the most significant bit
+      const [cx, cy] = at(cols[t], a);
+      s += `<circle cx="${cx}" cy="${cy}" r="4.6" fill="var(--void-deep)"/>`;
+    }
+    const [sx, sy] = at(sprocketX, a);
+    s += `<circle cx="${sx}" cy="${sy}" r="2" fill="var(--void-deep)" opacity=".8"/>`;
+  }
+  const a = PAD/2 + k*PITCH + PITCH/2;
+  s += horiz
+    ? `<rect x="${a-PITCH/2}" y="0" width="${PITCH}" height="${Ht}" fill="var(--strike)" opacity=".12"/>
+       <g stroke="var(--strike)" stroke-width="1.5" opacity=".95">
+         <path d="M${a-9},-4 H${a+9}"/><path d="M${a-9},${Ht+4} H${a+9}"/></g>`
+    : `<rect x="0" y="${a-PITCH/2}" width="${W}" height="${PITCH}" fill="var(--strike)" opacity=".12"/>
+       <g stroke="var(--strike)" stroke-width="1.5" opacity=".95">
+         <path d="M-4,${a-9} V${a+9}"/><path d="M${W+4},${a-9} V${a+9}"/></g>`;
+  tapeSvg.setAttribute('width', W); tapeSvg.setAttribute('height', Ht);
+  tapeSvg.setAttribute('viewBox', `${horiz?0:-5} ${horiz?-5:0} ${W+(horiz?0:10)} ${Ht+(horiz?10:0)}`);
+  tapeSvg.innerHTML = s;
+}
+tapeSvg.addEventListener('click', e => {
+  const row = e.target.closest?.('.taperow');
+  if(row) setTrace(+row.dataset.r);
+});
+
+/* =========================================================================
+   9. UI
+   ========================================================================= */
+const $ = id => document.getElementById(id);
+const dimrow = $('dimrow');
+for(let n=1;n<=5;n++){
+  const b = document.createElement('button');
+  b.className = 'dim'; b.type = 'button'; b.textContent = n;
+  b.setAttribute('aria-pressed', String(n === S.n));
+  b.setAttribute('aria-label', `Dimension ${n}`);
+  b.onclick = () => setN(n);
+  dimrow.appendChild(b);
+}
+
+function setN(n){
+  if(n === S.n || n < 1 || n > 5) return;
+  S.prevN = S.n; S.n = n; S.g = 0;
+  loadSnake(n);
+  S.traceF = 0;
+  if(ST.known) ST.known.fill(-1);
+  buildMeshes();
+  S.playing = false; flying.on = false; S.reject = 0;
+  if(marker) marker.visible = false;
+  if(n < 4) S.rot = false;
+  lastTapeK = -1;
+  syncUI(); msg('flip a bit', '');
+}
+
+function setTrace(k, quiet){
+  k = Math.max(0, Math.min(S.L, k));
+  if(k === S.traceK) return;
+  S.traceK = k;
+  if(!quiet) S.playing = false;
+  syncUI();
+}
+
+let msgTimer = null;
+function msg(text, cls){
+  clearTimeout(msgTimer);
+  const m = $('msg'); m.textContent = text; m.className = cls || '';
+}
+
+function syncUI(){
+  const n = S.n, L = S.L, k = S.traceK, s = SNAKES[n];
+  [...dimrow.children].forEach((b,i) => b.setAttribute('aria-pressed', String(i+1 === n)));
+  $('r-n').textContent = n;
+  $('r-v').textContent = 1 << n;
+  $('r-l').textContent = L;
+  const fill = (L + 1) / (1 << n) * 100;
+  $('r-f').textContent = Number.isInteger(fill) ? fill : +fill.toFixed(2);
+  $('fillbar').firstElementChild.style.width = fill + '%';
+  $('c-nodes').textContent = s.nodes.toLocaleString('en-GB');
+  $('c-ms').textContent = s.ms < 1 ? s.ms.toFixed(2) : s.ms.toFixed(1);
+  $('pos').textContent = String(k).padStart(2,'0') + ' / ' + String(L).padStart(2,'0');
+  $('bwd').disabled = k <= 0; $('fwd').disabled = k >= L;
+  $('play').setAttribute('aria-pressed', String(S.playing));
+  const rb = $('rotbtn');
+  rb.disabled = n < 4;
+  rb.setAttribute('aria-pressed', String(S.rot));
+  rb.title = n < 4 ? 'A rotation inside R³ is just an orbit — this needs n ≥ 4'
+                   : 'Rotate inside n-space before projecting (r)';
+  buildBits();
+}
+
+function buildBits(){
+  const n = S.n, k = S.traceK, v = S.path[k], prev = k > 0 ? S.path[k-1] : null;
+  const diff = prev === null ? -1 : Math.log2(v ^ prev) | 0;
+  const box = $('bits');
+  box.innerHTML = '';
+  for(let t=0; t<n; t++){
+    const bit = n-1-t;                       // leftmost cell holds the most significant bit
+    const on = (v >> bit) & 1;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'bit' + (on ? ' on' : '') + (bit === diff ? ' changed' : '');
+    b.append(String(on));
+    const idx = document.createElement('span'); idx.className = 'idx'; idx.textContent = bit;
+    b.append(idx);
+    b.setAttribute('aria-label', `Bit ${bit} is ${on}. Flip it.`);
+    b.onclick = () => flipBit(bit, b);
+    box.appendChild(b);
+  }
+}
+
+/* ---- the error-detection demo ---- */
+function flipBit(i, el){
+  if(inTransit()) return;
+  const k = S.traceK, cur = S.path[k], target = cur ^ (1 << i);
+  const fwd = k < S.L && S.path[k+1] === target;
+  const bwd = k > 0 && S.path[k-1] === target;
+  S.playing = false;
+  flying.on = true; flying.t = 0; flying.from = cur; flying.to = target;
+  flying.legal = fwd || bwd;
+  const bs = v => v.toString(2).padStart(S.n, '0');
+
+  if(fwd || bwd){
+    msg(`${bs(cur)} → ${bs(target)} · on the snake`, 'good');
+    setTimeout(() => setTrace(fwd ? k+1 : k-1, true), reduceMotion ? 0 : 210);
+  }else{
+    const st = vertexStates(S.L);              // judged against the whole snake, not the trace
+    const kind = st[target] === 2 ? 'on the snake, but not from here'
+               : st[target] === 1 ? 'burnt' : 'free space';
+    msg(`${bs(cur)} → ${bs(target)} · off the snake · ${kind} · error detected`, 'bad');
+    S.reject = 1;
+    el?.classList.add('reject');
+    setTimeout(() => el?.classList.remove('reject'), 360);
+    msgTimer = setTimeout(() => msg('flip a bit', ''), 4500);
+  }
+}
+
+$('fwd').onclick = () => setTrace(S.traceK + 1);
+$('bwd').onclick = () => setTrace(S.traceK - 1);
+const togglePlay = () => {
+  S.playing = !S.playing; S.playT = 0;
+  if(S.playing && S.traceK >= S.L){ S.traceK = 0; S.traceF = 0; }
+  syncUI();
+};
+$('play').onclick = togglePlay;
+const toggleRot = () => { if(S.n < 4) return; S.rot = !S.rot; syncUI(); };
+$('rotbtn').onclick = toggleRot;
+
+const notes = $('notes');
+const setNotes = open => {
+  notes.classList.toggle('open', open);
+  notes.setAttribute('aria-hidden', String(!open));
+  $('notesbtn').setAttribute('aria-expanded', String(open));
+  if(open) $('notesclose').focus(); else $('notesbtn').focus();
+};
+$('notesbtn').onclick = () => setNotes(!notes.classList.contains('open'));
+$('notesclose').onclick = () => setNotes(false);
+
+addEventListener('keydown', e => {
+  if(e.metaKey || e.ctrlKey || e.altKey) return;
+  if(e.key >= '1' && e.key <= '5'){ setN(+e.key); e.preventDefault(); }
+  else if(e.key === 'ArrowRight'){ setTrace(S.traceK + 1); e.preventDefault(); }
+  else if(e.key === 'ArrowLeft'){ setTrace(S.traceK - 1); e.preventDefault(); }
+  else if(e.key === ' ' && e.target.tagName !== 'BUTTON'){ togglePlay(); e.preventDefault(); }
+  else if(e.key === 'r' || e.key === 'R'){ toggleRot(); }
+  else if(e.key === '?'){ setNotes(true); }
+  else if(e.key === 'Escape'){ setNotes(false); }
+});
+
+mqMobile.addEventListener('change', () => { resize(); lastTapeK = -1; });
+
+/* ---- go ---- */
+buildMeshes();
+syncUI();
+buildTape(S.traceK); lastTapeK = S.traceK;
+resize();
+computePositions();
+requestAnimationFrame(frame);
+</script>
 </body>
 </html>

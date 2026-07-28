@@ -112,6 +112,9 @@ button{font:inherit; color:inherit; background:none; border:none; cursor:pointer
 #fillbar{width:100px; height:2px; background:var(--line); margin:7px 0 0 auto; position:relative}
 #fillbar i{position:absolute; inset:0 auto 0 0; background:var(--strike); box-shadow:0 0 8px var(--strike-mid);
   transition:width .5s cubic-bezier(.2,.7,.2,1)}
+/* where the other four dimensions sit on the same scale — the descent, at a glance */
+#fillbar s{position:absolute; top:-4px; bottom:-4px; width:1px; background:var(--dim); opacity:.45}
+#fillbar s.at{background:var(--strike); opacity:1; top:-6px; bottom:-6px}
 
 /* ---------- punched tape ---------- */
 #tapewrap{left:var(--edge); top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:10px}
@@ -122,6 +125,9 @@ button{font:inherit; color:inherit; background:none; border:none; cursor:pointer
 /* ---------- transport ---------- */
 #transport{left:50%; bottom:var(--edge); transform:translateX(-50%); text-align:center;
   display:flex; flex-direction:column; align-items:center; gap:11px}
+#stuck{font-family:var(--mono); font-size:9px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--glow); opacity:.9; margin-bottom:-2px}
+#stuck[hidden]{display:none}
 #bits{display:flex; gap:5px}
 .bit{
   position:relative; width:40px; height:48px; border:1px solid var(--line); background:rgba(19,20,16,.5);
@@ -261,6 +267,7 @@ button{font:inherit; color:inherit; background:none; border:none; cursor:pointer
 </aside>
 
 <div class="layer" id="transport">
+  <div id="stuck" hidden>every remaining neighbour is burnt &mdash; the snake is stuck</div>
   <div id="bits" role="group" aria-label="Bit string of the current vertex; activate a bit to flip it"></div>
   <div id="msg" role="status" aria-live="polite">flip a bit</div>
   <div id="steps">
@@ -336,6 +343,10 @@ button{font:inherit; color:inherit; background:none; border:none; cursor:pointer
 <script type="module">
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
+import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 
 /* =========================================================================
    1. THE SEARCH — longest induced path in Q(n), first edge fixed 0 -> 1.
@@ -476,10 +487,11 @@ function truncate(pts, f){
    5. SCENE
    ========================================================================= */
 const canvas = document.getElementById('gl');
-let renderer, scene, camera, controls, ok = true;
+let renderer, scene, camera, controls, composer, bloom, ok = true;
 try{
-  renderer = new THREE.WebGLRenderer({canvas, antialias:!isMobile(), alpha:true});
-  renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile() ? 1.75 : 2));
+  // opaque, not alpha: the bloom composer needs something real to blur against
+  renderer = new THREE.WebGLRenderer({canvas, antialias:false});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile() ? 1.5 : 1.75));
 }catch(e){ ok = false; }
 
 let group, vertMesh, glowPts, edgeLines, tubeMesh, tubeGlow, marker;
@@ -501,6 +513,7 @@ function glowTexture(){
 
 if(ok){
   scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x131410);
   camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
   camera.position.set(2.4, 1.75, 3.3);
   controls = new OrbitControls(camera, canvas);
@@ -515,8 +528,10 @@ if(ok){
   group = new THREE.Group(); scene.add(group);
 
   T.tube = new THREE.MeshPhongMaterial({
-    color:0x2464a0, emissive:0x5aa5dd, emissiveIntensity:0.62,
+    color:0x2464a0, emissive:0x5aa5dd, emissiveIntensity:0.72,
     specular:0xffffff, shininess:80, transparent:true});
+  T.vert = new THREE.MeshBasicMaterial({toneMapped:false});
+  // stand-in halo for machines that cannot afford the bloom pass
   T.tubeGlow = new THREE.ShaderMaterial({
     uniforms:{uColor:{value:new THREE.Color(0x9fd0f5)}, uI:{value:0.9}},
     vertexShader:`varying vec3 vN; varying vec3 vE;
@@ -527,7 +542,6 @@ if(ok){
       void main(){ float f = 1.0 - abs(dot(normalize(vN), normalize(vE)));
         gl_FragColor = vec4(uColor, pow(f, 3.6) * uI); }`,
     transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.BackSide});
-  T.vert = new THREE.MeshBasicMaterial({toneMapped:false});
   T.glow = new THREE.ShaderMaterial({
     uniforms:{map:{value:glowTexture()}, uScale:{value:600}},
     vertexShader:`uniform float uScale; attribute float size; attribute vec3 gcol; varying vec3 vC;
@@ -545,6 +559,40 @@ if(ok){
 
   marker = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), T.marker);
   marker.visible = false; marker.frustumCulled = false; group.add(marker);
+
+  // phosphor bleeds. A rim shader only fakes it at the silhouette; bloom does it
+  // everywhere the picture is actually bright, so burnt vertices glow too.
+  const rt = new THREE.WebGLRenderTarget(1, 1, {
+    type: THREE.HalfFloatType, samples: isMobile() ? 0 : 4});
+  composer = new EffectComposer(renderer, rt);
+  composer.addPass(new RenderPass(scene, camera));
+  bloom = new UnrealBloomPass(new THREE.Vector2(1,1), 0.62, 0.55, 0.5);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+}
+// Bloom is pure fill rate. Run it at half resolution, and if the machine still
+// cannot hold a frame rate, drop the pass and fall back to the rim shader.
+const BLOOM_SCALE = 0.5;
+// Judged on wall-clock, not on the clamped frame delta: a machine running at 2fps
+// would never accumulate enough clamped time to reach a verdict.
+const WARMUP = 600, WINDOW = 1500, FLOOR = 24;
+const perf = {t0:0, frames:0, judged:false};
+function judgePerf(now){
+  if(perf.judged) return;
+  // a backgrounded tab is throttled to ~1fps and a growing cube rebuilds the tube
+  // every frame — neither is evidence about the machine, so restart the measurement
+  if(document.hidden || inTransit()){ perf.t0 = 0; perf.frames = 0; return; }
+  if(!perf.t0){ perf.t0 = now; return; }
+  const since = now - perf.t0 - WARMUP;
+  if(since < 0) return;                                 // shader compile, first paints
+  perf.frames++;
+  if(since < WINDOW) return;
+  perf.judged = true;
+  if(perf.frames / (since/1000) < FLOOR){
+    bloom.enabled = false;
+    lastTubeKey = '';                                   // force the rim shell to be built
+    document.body.dataset.bloom = 'off';
+  }
 }
 
 let EDGE_LIST = [], edgePos, edgeCol, glowPos, glowSize, glowCol, builtFor = -1;
@@ -644,6 +692,9 @@ function frame(now){
   const settled = !(inTransit() && S.g < 0.62);
   const st = vertexStates(kInt);
   const head = S.path[Math.min(kInt, S.path.length-1)];
+  // At the end of an optimal snake the head is provably non-extendable: if it could
+  // be extended the search would have returned the longer path. Show that.
+  const stuckOn = (settled && kInt === S.L && S.L > 0) ? head : -1;
 
   // the snake's beads sit just proud of the tube; only the trace head swells
   const R_SNAKE = 0.082*sep, R_HEAD = 0.107*sep, R_BURNT = 0.060*sep, R_FREE = 0.026*sep;
@@ -693,9 +744,12 @@ function frame(now){
     if(inTransit()){
       al = Math.min(((a>>(H-1))&1) ? w : 1, ((b>>(H-1))&1) ? w : 1);
     }
-    // an edge with both ends spoken for warms very slightly — the lattice stays quiet
+    // the ways out of a stuck head, each one burnt; then the quiet lattice
+    const blocked = stuckOn >= 0 && (a === stuckOn || b === stuckOn) && st[a ^ b ^ stuckOn] === 1;
     const hot = settled && st[a] && st[b];
-    const r=(hot?0.20:0.145)*al, g=(hot?0.21:0.151)*al, bl=(hot?0.155:0.132)*al;
+    const r = (blocked?0.34:hot?0.20:0.145)*al,
+          g = (blocked?0.40:hot?0.21:0.151)*al,
+          bl= (blocked?0.07:hot?0.155:0.132)*al;
     edgeCol[o]=r; edgeCol[o+1]=g; edgeCol[o+2]=bl;
     edgeCol[o+3]=r; edgeCol[o+4]=g; edgeCol[o+5]=bl;
   }
@@ -705,7 +759,6 @@ function frame(now){
   rebuildTube(sep);
   T.tube.emissive.copy(C_EMIS).lerp(C_ALARM, S.reject);
   T.tube.color.copy(C_TUBE).lerp(C_TUBE_BAD, S.reject);
-  T.tubeGlow.uniforms.uColor.value.set(0x9fd0f5).lerp(C_ALARM, S.reject);
 
   if(flying.on){
     flying.t += dt / (reduceMotion ? 0.55 : 1.3);
@@ -734,7 +787,8 @@ function frame(now){
     camera.position.x = x*cs - z*sn; camera.position.z = x*sn + z*cs;
   }
   controls.update();
-  renderer.render(scene, camera);
+  composer.render();
+  judgePerf(now);
 }
 
 let lastTubeKey = '';
@@ -752,14 +806,18 @@ function rebuildTube(sep){
     const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.5);
     const segs = Math.max(14, pts.length * (isMobile() ? 8 : 13));
     const r = 0.072 * sep;
-    tubeMesh = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r, isMobile()?7:10, false), T.tube);
-    // the glow shell stays close to the tube: any wider and it self-intersects at the corners
-    tubeGlow = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r*1.22, isMobile()?9:14, false), T.tubeGlow);
-    tubeMesh.frustumCulled = tubeGlow.frustumCulled = false;
-    group.add(tubeMesh, tubeGlow);
+    tubeMesh = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r, isMobile()?8:12, false), T.tube);
+    tubeMesh.frustumCulled = false;
+    group.add(tubeMesh);
+    if(!bloom.enabled){
+      // the shell must hug the tube: any wider and it self-intersects at the corners
+      tubeGlow = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r*1.22, 12, false), T.tubeGlow);
+      tubeGlow.frustumCulled = false;
+      group.add(tubeGlow);
+    }
   }
   T.tube.opacity = snakeAlpha;
-  T.tubeGlow.uniforms.uI.value = 0.9 * snakeAlpha;
+  if(tubeGlow) T.tubeGlow.uniforms.uI.value = 0.9 * snakeAlpha;
 }
 
 function resize(){
@@ -767,6 +825,8 @@ function resize(){
   const stage = document.getElementById('stage');
   const w = stage.clientWidth || 1, h = stage.clientHeight || 1;
   renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  bloom.setSize(Math.max(1, w*BLOOM_SCALE), Math.max(1, h*BLOOM_SCALE));
   camera.aspect = w/h; camera.updateProjectionMatrix();
   // pull the camera back far enough that the widest object still clears both axes
   const R = 1.4, vT = Math.tan(THREE.MathUtils.degToRad(camera.fov)/2);
@@ -861,6 +921,12 @@ tapeSvg.addEventListener('click', e => {
    9. UI
    ========================================================================= */
 const $ = id => document.getElementById(id);
+// fill ticks: one per dimension, at (len+1)/2^n
+$('fillbar').insertAdjacentHTML('beforeend', [1,2,3,4,5].map(n => {
+  const f = (SNAKES[n].len + 1) / (1 << n) * 100;
+  return `<s style="left:${f}%" title="n=${n}: ${+f.toFixed(2)}%"></s>`;
+}).join(''));
+
 const dimrow = $('dimrow');
 for(let n=1;n<=5;n++){
   const b = document.createElement('button');
@@ -907,10 +973,13 @@ function syncUI(){
   $('r-l').textContent = L;
   const fill = (L + 1) / (1 << n) * 100;
   $('r-f').textContent = Number.isInteger(fill) ? fill : +fill.toFixed(2);
-  $('fillbar').firstElementChild.style.width = fill + '%';
+  const bar = $('fillbar');
+  bar.firstElementChild.style.width = fill + '%';
+  [...bar.querySelectorAll('s')].forEach((s,i) => s.classList.toggle('at', i+1 === n));
   $('c-nodes').textContent = s.nodes.toLocaleString('en-GB');
   $('c-ms').textContent = s.ms < 1 ? s.ms.toFixed(2) : s.ms.toFixed(1);
   $('pos').textContent = String(k).padStart(2,'0') + ' / ' + String(L).padStart(2,'0');
+  $('stuck').hidden = !(L > 0 && k === L);
   $('bwd').disabled = k <= 0; $('fwd').disabled = k >= L;
   $('play').setAttribute('aria-pressed', String(S.playing));
   const rb = $('rotbtn');
@@ -982,6 +1051,7 @@ const notes = $('notes');
 const setNotes = open => {
   notes.classList.toggle('open', open);
   notes.setAttribute('aria-hidden', String(!open));
+  notes.inert = !open;                       // keep the closed panel out of the tab order
   $('notesbtn').setAttribute('aria-expanded', String(open));
   if(open) $('notesclose').focus(); else $('notesbtn').focus();
 };
@@ -1003,6 +1073,7 @@ mqMobile.addEventListener('change', () => { resize(); lastTapeK = -1; });
 
 /* ---- go ---- */
 buildMeshes();
+notes.inert = true;
 syncUI();
 buildTape(S.traceK); lastTapeK = S.traceK;
 resize();
